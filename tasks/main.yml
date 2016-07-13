@@ -1,7 +1,8 @@
 ---
 # tasks file for ansible-nexus
 - name: Download nexus_package 
-  get_url: url=http://download.sonatype.com/nexus/oss/{{ nexus_package }} dest="{{ nexus_download_dir }}/{{ nexus_package }}"
+#https://sonatype-download.global.ssl.fastly.net/nexus/3/nexus-3.0.0-03-unix.sh
+  get_url: url=https://sonatype-download.global.ssl.fastly.net/nexus/3/{{ nexus_package }} dest="{{ nexus_download_dir }}/{{ nexus_package }}"
   tags: download
   sudo: no
 
@@ -34,7 +35,12 @@
   tags: unpack
 
 - name: Update symlink nexus-latest
-  shell: ln -fs `ls -d {{ nexus_installation_dir }}/nexus-*|tail -1` {{ nexus_installation_dir }}/nexus-latest
+  file:
+   src="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}"
+   dest="{{ nexus_installation_dir }}/nexus-latest"
+   owner="nexus"
+   group="nexus"
+   state=link
 
 - name: Install createrepo for nexus-yum-repository-plugin
   yum: name=createrepo state=installed
@@ -82,34 +88,38 @@
 
 - name: Set permissions and ownership on Nexus pid directory
   file:
-    path=/var/run/nexus
-    owner="{{ nexus_os_user }}"
-    group="{{ nexus_os_group }}"
-    state=directory
+   path=/var/run/nexus
+   owner="{{ nexus_os_user }}"
+   group="{{ nexus_os_group }}"
+   state=directory
 
-- name: Configure port in nexus.properties
+- name: Link start script
+  file:
+   src="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}/bin/nexus"
+   dest=/etc/init.d/nexus
+   owner="root"
+   group="root"
+   mode=0600
+   state=link
+
+
+- name: Configure port in org.sonatype.nexus.cfg
   lineinfile:
-    dest="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}/conf/nexus.properties"
-    line="application-port={{ nexus_port }}"
+    dest="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}/etc/org.sonatype.nexus.cfg"
     regexp="application-port=.*"
+    line="application-port={{ nexus_port }}"
     state=present
   notify:
     - 'restart nexus'
-
-- name: Configure workdir in nexus.properties
+- name: Configure user
   lineinfile:
-    dest="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}/conf/nexus.properties"
-    line="nexus-work={{ nexus_working_dir }}"
-    regexp="nexus-work=.*"
+    dest="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}/bin/nexus.rc"
+    regexp="run_as_user=.*"
+    line="run_as_user='nexus'"
     state=present
   notify:
     - 'restart nexus'
 
-- name: Copy the /etc/init.d/nexus file
-  template: src=init-nexus.j2 dest=/etc/init.d/nexus owner=root group=root mode=0755 backup=yes
-  when: ansible_os_family == "RedHat"
-  notify:
-    - 'restart nexus'
 
 - name: Register service with chkconfig system
   service: name=nexus enabled=yes
@@ -119,3 +129,4 @@
   sudo: yes
   command: chkconfig nexus reset
   when: ansible_os_family == "RedHat"
+
