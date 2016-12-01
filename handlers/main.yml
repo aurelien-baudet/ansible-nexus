@@ -10,3 +10,7 @@
 - name: 'restart nexus'
   sudo: yes
   service: name=nexus state=restarted
+
+- name: 'reload nexus'
+  sudo: yes
+  command: "systemctl daemon-reload"
