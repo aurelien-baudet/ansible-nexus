@@ -1,42 +1,48 @@
 ---
 # tasks file for ansible-nexus
 - name: Download nexus_package 
-#https://sonatype-download.global.ssl.fastly.net/nexus/3/nexus-3.0.0-03-unix.sh
-  get_url: url=https://sonatype-download.global.ssl.fastly.net/nexus/3/{{ nexus_package }} dest="{{ nexus_download_dir }}/{{ nexus_package }}"
+  get_url: url="{{ nexus_download_url }}" dest="{{ nexus_download_dir }}/{{ nexus_package }}"
   tags: download
-  sudo: no
+  become: false
 
 - name: Ensure Nexus o/s group exists
   group: name="{{ nexus_os_group }}" state=present
   when: nexus_create_os_group
-  sudo: true
+  become: true
 
 - name: Ensure Nexus o/s user exists
   user: name="{{ nexus_os_user }}" group="{{ nexus_os_group }}" shell="{{ nexus_os_user_shell }}" state=present home="{{ nexus_os_home }}"
   when: nexus_create_os_user
-  sudo: true
+  become: true
 
 - name: Ensure Nexus installation directory exists
   file:
     path="{{ nexus_installation_dir }}"
     state="directory"
-  sudo: true
+  become: true
 
+- name: Get folder name for Nexus in downloaded archive
+  shell: "tar tzf '{{ nexus_download_dir }}/{{ nexus_package }}' | sed -e 's@/.*@@' | uniq"
+  register: nexus_extracted_folder_name_result
+
+- set_fact:
+    nexus_extracted_folder_name: "{{ nexus_extracted_folder_name_result.stdout_lines[0] }}"
+    
 - name: Unpack Nexus download
   unarchive:
     src="{{ nexus_download_dir }}/{{ nexus_package }}"
     dest="{{ nexus_installation_dir }}"
-    creates="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}"
+    creates="{{ nexus_installation_dir }}/{{ nexus_extracted_folder_name }}"
     force=no
     copy=false
     owner={{ nexus_os_user }}
     group={{ nexus_os_group }}
     mode="0755"
   tags: unpack
-
+    
 - name: Update symlink nexus-latest
   file:
-   src="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}"
+   src="{{ nexus_installation_dir }}/{{ nexus_extracted_folder_name }}"
    dest="{{ nexus_installation_dir }}/nexus-latest"
    owner="nexus"
    group="nexus"
@@ -56,7 +62,7 @@
 
 - name: Set permissions and ownership on Nexus installation directory
   file:
-    path={{ nexus_installation_dir }}/{{ nexus_package }}
+    path={{ nexus_installation_dir }}/{{ nexus_extracted_folder_name }}
     state="directory"
     owner="{{ nexus_os_user }}"
     group="{{ nexus_os_group }}"
@@ -93,37 +99,57 @@
    group="{{ nexus_os_group }}"
    state=directory
 
-- name: Link start script
+- name: Add dedicated configuration folder
   file:
-   src="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}/bin/nexus"
-   dest=/etc/init.d/nexus
-   owner="root"
-   group="root"
-   mode=0600
-   state=link
+   path="{{ nexus_working_dir }}/nexus3/etc"
+   owner="{{ nexus_os_user }}"
+   group="{{ nexus_os_group }}"
+   state=directory
 
-
-- name: Configure port in org.sonatype.nexus.cfg
-  lineinfile:
-    dest="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}/etc/org.sonatype.nexus.cfg"
-    regexp="application-port=.*"
-    line="application-port={{ nexus_port }}"
-    state=present
+- name: Configure Nexus port
+  template:
+    src="nexus.properties.j2"
+    dest="{{ nexus_working_dir }}/nexus3/etc/nexus.properties"
+    force="yes"
+    backup="yes"
   notify:
     - 'restart nexus'
+    
 - name: Configure user
   lineinfile:
-    dest="{{ nexus_installation_dir }}/nexus-{{ nexus_version }}/bin/nexus.rc"
+    dest="{{ nexus_installation_dir }}/nexus-latest/bin/nexus.rc"
     regexp="run_as_user=.*"
     line="run_as_user='nexus'"
     state=present
   notify:
     - 'restart nexus'
+    
+- name: Configure path to data
+  lineinfile:
+    dest="{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
+    regexp="-Dkaraf.data=.*"
+    line="-Dkaraf.data={{ nexus_working_dir }}/nexus3"
+    state=present  
 
-- name: Add nexus service
-  template:
-    src: nexus.service.j2
-    dest: "/etc/systemd/system/nexus.service"
-  notify:
-    - 'reload nexus'
+- name: Configure path to tmp
+  lineinfile:
+    dest="{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
+    regexp="-Djava.io.tmpdir=.*"
+    line="-Djava.io.tmpdir={{ nexus_working_dir }}/nexus3/tmp"
+    state=present  
 
+- name: Configure path to tmp
+  lineinfile:
+    dest="{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
+    regexp="-XX:LogFile=.*"
+    line="-XX:LogFile={{ nexus_working_dir }}/nexus3/log/jvm.log"
+    state=present  
+
+- name: Increase limits
+  pam_limits:
+    domain: "{{ nexus_os_user }}"
+    limit_type: '-'
+    limit_item: nofile
+    value: "{{ nexus_file_handle_limit }}"
+
+- include_tasks: "service/{{ ansible_service_mgr }}.yml"

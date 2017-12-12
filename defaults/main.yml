@@ -2,8 +2,7 @@
 # defaults file for ansible-nexus
 nexus_download_dir: '/tmp'
 nexus_version: 'latest'
-#nexus_version: '2.10.0-02'
-nexus_package: 'nexus-{{ nexus_version }}-unix.tar.gz'
+nexus_package: "{{ (nexus_version == 'latest') | ternary(nexus_version, 'nexus-' + nexus_version) + '-unix.tar.gz' }}"
 nexus_installation_dir: '/usr/share'
 nexus_home_dir: "{{ nexus_installation_dir }}/nexus-latest/"
 nexus_working_dir: '/var/nexus'
@@ -14,3 +13,5 @@ nexus_os_home: '/home/'
 nexus_create_os_group: "{{ nexus_create_os_user | bool }}"
 nexus_os_group: 'nexus'
 nexus_os_user_shell: '/bin/bash'
+nexus_download_url: "https://sonatype-download.global.ssl.fastly.net/nexus/3/{{ nexus_package }}"
+nexus_file_handle_limit: 65536

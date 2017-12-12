@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=forking
+LimitNOFILE={{ nexus_file_handle_limit }}
 ExecStart={{ nexus_home_dir }}bin/nexus start
 ExecStop={{ nexus_home_dir }}bin/nexus stop
 ExecReload={{ nexus_home_dir }}bin/nexus restart

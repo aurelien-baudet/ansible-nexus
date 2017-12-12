@@ -1,0 +1,24 @@
+- name: Link start script
+  file:
+   src="{{ nexus_installation_dir }}/nexus-latest/bin/nexus"
+   dest=/etc/init.d/nexus
+   owner="root"
+   group="root"
+   mode=0600
+   state=link
+
+# On Ubuntu systems there is a caveat: Ubuntu ignores the /etc/security/limits.conf file for processes started by init.d.
+# So if NXRM is started using init.d there, edit /etc/pam.d/common-session and uncomment the following line ( remove the hash # and space at the beginning of the line):
+# # session    required   pam_limits.so
+- name: Fix Ubuntu limits
+  lineinfile:
+    dest="/etc/pam.d/common-session"
+    regexp=".*session.+require.+pam_limits.so"
+    line="session    required   pam_limits.so"
+    state=present
+  when: ansible_distribution == 'Ubuntu'
+    
+- name: Set service start/stop order
+  service: 
+    name: nexus
+    state: restarted
