@@ -1,0 +1,16 @@
+[Unit]
+Description=Sonar Nexus {{ nexus_version }}
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+ExecStart={{ nexus_home_dir }}bin/nexus start
+ExecStop={{ nexus_home_dir }}bin/nexus stop
+ExecReload={{ nexus_home_dir }}bin/nexus restart
+PIDFile={{ nexus_home_dir }}bin/jsw/linux-x86-64/nexus.pid
+User={{ nexus_os_user }}
+
+[Install]
+Alias=nexus
+WantedBy=default.target

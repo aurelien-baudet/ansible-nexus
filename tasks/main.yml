@@ -12,7 +12,7 @@
   sudo: true
 
 - name: Ensure Nexus o/s user exists
-  user: name="{{ nexus_os_user }}" group="{{ nexus_os_group }}" shell="{{ nexus_os_user_shell }}" state=present
+  user: name="{{ nexus_os_user }}" group="{{ nexus_os_group }}" shell="{{ nexus_os_user_shell }}" state=present home="{{ nexus_os_home }}"
   when: nexus_create_os_user
   sudo: true
 
@@ -120,13 +120,10 @@
   notify:
     - 'restart nexus'
 
-
-- name: Register service with chkconfig system
-  service: name=nexus enabled=yes
-  when: ansible_os_family == "RedHat"
-
-- name: Set service start/stop order
-  sudo: yes
-  command: chkconfig nexus reset
-  when: ansible_os_family == "RedHat"
+- name: Add nexus service
+  template:
+    src: nexus.service.j2
+    dest: "/etc/systemd/system/nexus.service"
+  notify:
+    - 'reload nexus'
 

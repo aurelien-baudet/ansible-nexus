@@ -13,5 +13,9 @@
   notify:
     - 'wait for nexus'
 
+- name: 'reload nexus'
+  sudo: yes
+  command: "systemctl daemon-reload"
+  
 - name: 'wait for nexus'
   wait_for: port={{nexus_port}} delay=10
