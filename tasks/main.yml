@@ -106,6 +106,43 @@
    group="{{ nexus_os_group }}"
    state=directory
 
+    
+- name: Configure path to data
+  lineinfile:
+    dest="{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
+    regexp="-Dkaraf.data=.*"
+    line="-Dkaraf.data={{ nexus_working_dir }}/nexus3"
+    state=present  
+  notify:
+    - 'restart nexus'
+
+- name: Configure path to tmp
+  lineinfile:
+    dest="{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
+    regexp="-Djava.io.tmpdir=.*"
+    line="-Djava.io.tmpdir={{ nexus_working_dir }}/nexus3/tmp"
+    state=present  
+  notify:
+    - 'restart nexus'
+
+- name: Configure path to tmp
+  lineinfile:
+    dest="{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
+    regexp="-XX:LogFile=.*"
+    line="-XX:LogFile={{ nexus_working_dir }}/nexus3/log/jvm.log"
+    state=present  
+  notify:
+    - 'restart nexus'
+
+- name: Increase limits
+  pam_limits:
+    domain: "{{ nexus_os_user }}"
+    limit_type: '-'
+    limit_item: nofile
+    value: "{{ nexus_file_handle_limit }}"
+  notify:
+    - 'restart nexus'
+
 - name: Configure Nexus port
   template:
     src="nexus.properties.j2"
@@ -123,33 +160,15 @@
     state=present
   notify:
     - 'restart nexus'
-    
-- name: Configure path to data
-  lineinfile:
-    dest="{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
-    regexp="-Dkaraf.data=.*"
-    line="-Dkaraf.data={{ nexus_working_dir }}/nexus3"
-    state=present  
-
-- name: Configure path to tmp
-  lineinfile:
-    dest="{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
-    regexp="-Djava.io.tmpdir=.*"
-    line="-Djava.io.tmpdir={{ nexus_working_dir }}/nexus3/tmp"
-    state=present  
-
-- name: Configure path to tmp
-  lineinfile:
-    dest="{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
-    regexp="-XX:LogFile=.*"
-    line="-XX:LogFile={{ nexus_working_dir }}/nexus3/log/jvm.log"
-    state=present  
-
-- name: Increase limits
-  pam_limits:
-    domain: "{{ nexus_os_user }}"
-    limit_type: '-'
-    limit_item: nofile
-    value: "{{ nexus_file_handle_limit }}"
 
 - include_tasks: "service/{{ ansible_service_mgr }}.yml"
+
+# for idempotency
+- name: Ensure that Nexus service is started
+  service:
+    name: nexus
+    state: started
+    enabled: yes
+  notify:
+    - 'wait for nexus'
+    
